@@ -3,9 +3,13 @@ MITM proxy to intercept Puzzles and Dragons box data and sync with padherder.com
 
 # Requires
 Python 2.7
+
 mitmproxy (pip install mitmproxy)
+
 requests (pip install requests)
+
 dnslib (pip install dnslib)
+
 
 # Usage
 For now, you need to create a file named "padherder_proxy_settings.txt" with your padherder username as the first
