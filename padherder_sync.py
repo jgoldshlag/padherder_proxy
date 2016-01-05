@@ -61,18 +61,15 @@ def get_cached_data(session, cache_time, cache_path, url):
 	cache_old = time.time() - (cache_time * 60 * 60)
 	if os.path.exists(cache_path) and os.stat(cache_path).st_mtime > cache_old:
 		# Use cached data
-		print 'Using cached data.'
 		ret = cPickle.load(open(cache_path, 'rb'))
 	else:
 		# Retrieve API data
-		print 'Retrieving data from PADherder API...',
 		sys.stdout.flush()
 		
 		r = session.get(url)
 		if r.status_code != requests.codes.ok:
 			print 'failed: %s' % (r.status_code)
 			return
-		print 'done.'
 		
 		ret = json.loads(r.content)
 		
@@ -119,13 +116,23 @@ def do_sync(raw_captured_data, status_ctrl):
 			unknown_pad_id_monsters[monster['id']] = monster
 		else:
 			existing_monsters[monster['pad_id']] = monster
-	
+			
+	material_map = {}
+	for material in raw_user_data['materials']:
+		material_map[material['monster']] = material
+
 	add_status_msg("Downloaded current padherder box", status_ctrl)
 	captured_data = json.loads(raw_captured_data)
 	
+	material_counts = {}
 	for mon_array in captured_data['card']:
 		jp_id = us_to_jp_map.get(mon_array[5], mon_array[5])
 		base_data = monster_data[jp_id]
+		
+		# Update material counts
+		if jp_id in material_map:
+			material_counts[jp_id] = material_counts.get(jp_id, 0) + 1
+			
 		if base_data['type'] in (0, 12, 14):
 			continue
 
@@ -164,9 +171,9 @@ def do_sync(raw_captured_data, status_ctrl):
 				
 				r = session.patch(existing_data['url'], update_data)
 				if r.status_code == requests.codes.ok:
-					add_status_msg('Updated monster #%d: %s' % (existing_data['id'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					add_status_msg('Updated monster %s (id %d): %s' % (base_data['name'], existing_data['id'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
 				else:
-					add_status_msg('Failed updating monster #%d: %s %s' % (existing_data['id'], r.status_code, r.content), status_ctrl)
+					add_status_msg('Failed updating monster %s (id %d): %s %s' % (base_data['name'], existing_data['id'], r.status_code, r.content), status_ctrl)
 				
 			del existing_monsters[mon_array[0]]
 		else:
@@ -177,30 +184,43 @@ def do_sync(raw_captured_data, status_ctrl):
 				if mon['monster'] == jp_id:
 					found_id = mon_id
 					mon_url = mon['url']
+					mon_name = mon['name']
 					break
 			update_data = {'monster': jp_id, 'pad_id': mon_array[0], 'current_xp': mon_array[1], 'current_skill': mon_array[3], 'plus_hp': mon_array[6], 'plus_atk': mon_array[7], 'plus_rcv': mon_array[8], 'current_awakening': mon_array[9]}
 			if found_id is not None:
 				del unknown_pad_id_monsters[found_id]
 				r = session.patch(mon_url, update_data)
 				if r.status_code == requests.codes.ok:
-					add_status_msg('Updated monster #%d: %s' % (jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					add_status_msg('Updated monster %s (id %d): %s' % (mon_name, jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
 				else:
-					add_status_msg('Failed updating monster #%d: %s %s' % (jp_id, r.status_code, r.content), status_ctrl)
+					add_status_msg('Failed updating monster %s (id %d): %s %s' % (mon_name, jp_id, r.status_code, r.content), status_ctrl)
 			else:
 				r = session.post(URL_MONSTER_CREATE, update_data)
 				if r.status_code == requests.codes.ok or r.status_code == 201:
-					add_status_msg('Created monster %r: %s' % (monster_data[jp_id]['name'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					add_status_msg('Created monster %s: %s' % (monster_data[jp_id]['name'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
 				else:
-					add_status_msg('Failed creating monster %r: %s %s' %(monster_data[jp_id]['name'], r.status_code, r.content), status_ctrl)
+					add_status_msg('Failed creating monster %s: %s %s' % (monster_data[jp_id]['name'], r.status_code, r.content), status_ctrl)
 	
 	for mon in existing_monsters.values():
 		r = session.delete(mon['url'])
 
 		if r.status_code == 204:
-			add_status_msg('Removed monster %r' % mon['id'], status_ctrl)
+			add_status_msg('Removed monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
 		else:
-			add_status_msg('Failed to remove monster %r' % mon['id'], status_ctrl)
+			add_status_msg('Failed to remove monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
 	
+	# Maybe update materials
+	for monster_id, material in material_map.items():
+		new_count = material_counts.get(monster_id, 0)
+		if new_count != material['count']:
+			data = dict(count=new_count)
+			r = session.patch(material['url'], data)
+			if r.status_code == requests.codes.ok or r.status_code == 201:
+				add_status_msg('Updated material %s from %d to %d' % (monster_data[monster_id]['name'], material['count'], new_count), status_ctrl)
+			else:
+				add_status_msg('Failed updating material %s: %s %s' % (monster_data[monster_id]['name'], r.status_code, r.content), status_ctrl)
+
+
 	add_status_msg('Done', status_ctrl)
 
 			
