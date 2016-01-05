@@ -106,7 +106,12 @@ def do_sync(raw_captured_data, status_ctrl):
 		monster_data[monster['id']] = monster
 
 	add_status_msg("Downloaded full monster data", status_ctrl)
-	raw_user_data = get_cached_data(session, 0, os.path.join(module_path(), '%s_user_data.pickle' % (session.auth[0])), URL_USER_DETAILS % (session.auth[0]))
+	r = session.get(URL_USER_DETAILS % (session.auth[0]))
+	if r.status_code != requests.codes.ok:
+		print 'failed: %s' % (r.status_code)
+		return
+	
+	raw_user_data = json.loads(r.content)
 	existing_monsters = {}
 	unknown_pad_id_monsters = {}
 	for monster in raw_user_data['monsters']:

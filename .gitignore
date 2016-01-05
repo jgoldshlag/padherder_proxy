@@ -1,3 +1,10 @@
 padherder_proxy_settings.txt
 monster_data.pickle
 *.pyc
+*.pyc
+custom_events.pyc
+*.pyc
+monster_data.pickle
+build
+dist
+padherder_proxy.spec
