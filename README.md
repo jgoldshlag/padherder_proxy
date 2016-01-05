@@ -18,6 +18,6 @@ line of the file and your padherder password as the second line
 Then you should be able to do:
 python padherder_proxy.py
 
-Then on your iOS device, set your HTTP proxy to be your computer's ip address. Then go to Safari and go to "http://mitm.it", click the iOS link and click install to install the certificate. You only have to do this once, and once it is done, you can remove the HTTP proxy settings
+Then on your iOS device, set your HTTP proxy to be your computer's ip address, port 8080. Then go to Safari and go to "http://mitm.it", click the iOS link and click install to install the certificate. You only have to do this once, and once it is done, you can remove the HTTP proxy settings
 
 Then every time you want to sync, change your DNS settings to point to your computer's ip address. Then close PAD completely and open it. After you get in game, close PAD completely and change your DNS settings back. Your padherder should now be synced to your box.
