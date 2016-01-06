@@ -83,6 +83,10 @@ class PadMaster(flow.FlowMaster):
 				content = u"\r\n".join(
 					u"".join(colorful(line)) for line in lines
 				)
+				
+				cap = open('captured_data.txt', 'w')
+				cap.write(content)
+				cap.close()
 				thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl, self.region))
 		return f
 

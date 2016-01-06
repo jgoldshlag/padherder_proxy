@@ -8,3 +8,4 @@ monster_data.pickle
 build
 dist
 padherder_proxy.spec
+captured_data.txt

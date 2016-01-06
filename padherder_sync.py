@@ -127,11 +127,17 @@ def do_sync(raw_captured_data, status_ctrl, region):
 	material_counts = {}
 	for mon_array in captured_data['card']:
 		jp_id = us_to_jp_map.get(mon_array[5], mon_array[5])
-		base_data = monster_data[jp_id]
-		
 		# Update material counts
 		if jp_id in material_map:
 			material_counts[jp_id] = material_counts.get(jp_id, 0) + 1
+			
+		if not jp_id in monster_data:
+			if mon_array[0] in existing_monsters:
+				del existing_monsters[mon_array[0]]
+			add_status_msg('Got monster in box that is not in padherder: id = %d' % (jp_id), status_ctrl)
+			continue
+			
+		base_data = monster_data[jp_id]
 			
 		if base_data['type'] in (0, 12, 14):
 			continue
