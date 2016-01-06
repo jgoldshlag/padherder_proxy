@@ -106,7 +106,9 @@ class InterceptResolver(BaseResolver):
 		qname = request.q.qname
 		qtype = QTYPE[request.q.qtype]
 		if qname.matchGlob("api-*padsv.gungho.jp."):
-			reply.add_answer(RR(qname,QTYPE.A,rdata=A(socket.gethostbyname(socket.gethostname()))))
+			config = wx.ConfigBase.Get()
+			host = config.Read("host") or socket.gethostbyname(socket.gethostname())
+			reply.add_answer(RR(qname,QTYPE.A,rdata=A(host)))
 			evt = custom_events.wxStatusEvent(message="Got DNS Request")
 			wx.PostEvent(self.status_ctrl,evt)
 			evt = custom_events.wxDNSEvent(message=str(qname)[:-1])
@@ -138,9 +140,11 @@ def serveDNS(logger, status_ctrl, main_frame):
 		'log_error',		# Decoding error
 	}
 
+	config = wx.ConfigBase.Get()
+	host = config.Read("host") or socket.gethostbyname(socket.gethostname())
 	udp_server = DNSServer(resolver,
 						   port=53,
-						   address=socket.gethostbyname(socket.gethostname()),
+						   address=host,
 						   logger=logger)
 	udp_server.start_thread()
 

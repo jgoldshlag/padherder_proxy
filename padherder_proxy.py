@@ -101,11 +101,13 @@ class MainTab(wx.Panel):
 		wx.Panel.__init__(self, parent)
 		grid = wx.GridBagSizer(hgap=5, vgap=10)
 
-		ip = socket.gethostbyname(socket.gethostname())
-		start_instructions = wx.StaticText(self, label="Just the first time, you need to add the HTTPS certificate to your iOS device.\nTo do this, go to your wifi settings and set up a manual HTTP proxy.\nSet the server to '%s' and the port to 8080. Then visit http://mitm.it in Safari,\nclick the iOS link, and install the configuration profile when asked.\nAfter this is done, turn off the HTTP proxy." % ip)
+		config = wx.ConfigBase.Get()
+		host = config.Read("host") or socket.gethostbyname(socket.gethostname())
+
+		start_instructions = wx.StaticText(self, label="Just the first time, you need to add the HTTPS certificate to your iOS device.\nTo do this, go to your wifi settings and set up a manual HTTP proxy.\nSet the server to '%s' and the port to 8080. Then visit http://mitm.it in Safari,\nclick the iOS link, and install the configuration profile when asked.\nAfter this is done, turn off the HTTP proxy." % host)
 		grid.Add(start_instructions, pos=(0,0))
 		
-		dns_instructions = wx.StaticText(self, label="To synchronize your box with padherder, enter your padherder username and password in Settings.\nThen go to your wifi settings and change your DNS server to '%s'. Then press the home button.\nIf you switch to the DNS Proxy Log tab, you should see a bunch of log lines.\nMake sure Puzzle and Dragons is completely closed, and re-open it.\nOnce you get in game, close PAD completely again and restore your DNS settings." % ip)
+		dns_instructions = wx.StaticText(self, label="To synchronize your box with padherder, enter your padherder username and password in Settings.\nThen go to your wifi settings and change your DNS server to '%s'. Then press the home button.\nIf you switch to the DNS Proxy Log tab, you should see a bunch of log lines.\nMake sure Puzzle and Dragons is completely closed, and re-open it.\nOnce you get in game, close PAD completely again and restore your DNS settings." % host)
 		grid.Add(dns_instructions, pos=(1,0))
 		
 		status_label = wx.StaticText(self, label="Status:")
@@ -161,6 +163,15 @@ class SettingsTab(wx.Panel):
 		self.Bind(wx.EVT_TEXT, self.onPasswordChange, self.editPassword)
 		grid.Add(self.editPassword, pos=(1,1))
 
+		lblHost = wx.StaticText(self, label="IP Address to bind to:")
+		grid.Add(lblHost, pos=(2,0))
+		self.editHost = wx.TextCtrl(self, value=config.Read("host"), size=(140,-1))
+		self.Bind(wx.EVT_TEXT, self.onHostChange, self.editHost)
+		grid.Add(self.editHost, pos=(2,1))
+		
+		lblHostHelp = wx.StaticText(self, label="Leave blank, unless your computer has multiple IPs. Restart app after changing this")
+		grid.Add(lblHostHelp, pos=(3,0), span=(1,2))
+
 		self.SetSizer(grid)
 		
 	def onUsernameChange(self, event):
@@ -170,6 +181,10 @@ class SettingsTab(wx.Panel):
 	def onPasswordChange(self, event):
 		config = wx.ConfigBase.Get()
 		config.Write("password", event.GetString())
+	
+	def onHostChange(self, event):
+		config = wx.ConfigBase.Get()
+		config.Write("host", event.GetString())
 	
 class MainWindow(wx.Frame):
 	def __init__(self, parent, title):
@@ -209,7 +224,11 @@ class MainWindow(wx.Frame):
 			region = 'NA'
 		else:
 			region = 'JP'
-		proxy_config = proxy.ProxyConfig(port=443, host=socket.gethostbyname(socket.gethostname()), mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
+		
+		config = wx.ConfigBase.Get()
+		host = config.Read("host") or socket.gethostbyname(socket.gethostname())
+		
+		proxy_config = proxy.ProxyConfig(port=443, host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
 		proxy_server = ProxyServer(proxy_config)
 		self.proxy_master = PadMaster(proxy_server, self.main_tab, region)
 		thread.start_new_thread(self.proxy_master.run, ())
@@ -220,11 +239,13 @@ def main():
 	config = wx.Config("padherder_proxy")
 	wx.ConfigBase.Set(config)
 	frame = MainWindow(None, "Padherder Proxy")
-		
+	
+	host = config.Read("host") or socket.gethostbyname(socket.gethostname())
+	
 	logger = dnsproxy.MyDNSLogger(frame.dns_tab)
 	thread.start_new_thread(dnsproxy.serveDNS, (logger, frame.main_tab, frame))
 	
-	app_config = proxy.ProxyConfig(port=8080, host=socket.gethostbyname(socket.gethostname()))
+	app_config = proxy.ProxyConfig(port=8080, host=host)
 	app_server = ProxyServer(app_config)
 	app_master = dump.DumpMaster(app_server, dump.Options(app_host='mitm.it', app_port=80, app=True))
 	frame.app_master = app_master
