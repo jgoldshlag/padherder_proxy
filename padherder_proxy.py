@@ -116,6 +116,10 @@ class MainTab(wx.Panel):
 		self.status_ctrl = wx.TextCtrl(self, wx.ID_ANY, size=(400,300),
 						  style = wx.TE_MULTILINE|wx.TE_READONLY)
 		self.Bind(custom_events.EVT_STATUS_EVENT, self.onStatusEvent)
+		if not config.Read("username"):
+			self.status_ctrl.AppendText("You need to set your padherder username in Settings\n")
+		if not config.Read("password"):
+			self.status_ctrl.AppendText("You need to set your padherder password in Settings\n")
 		
 		grid.Add(self.status_ctrl, pos=(3,0), span=(1,2))
 		
