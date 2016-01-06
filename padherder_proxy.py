@@ -14,6 +14,7 @@ from libmproxy import controller, proxy, flow, dump, cmdline, contentviews
 from libmproxy.proxy.server import ProxyServer
 import wx
 from urlparse import urljoin
+import traceback
 
 import dnsproxy
 import padherder_sync
@@ -196,6 +197,7 @@ class MainWindow(wx.Frame):
 		self.Bind(wx.EVT_CLOSE, self.onClose)
 		self.Bind(custom_events.EVT_DNS_EVENT, self.onDNSEvent)
 		self.proxy_master = None
+		self.app_master = None
 		
 		p = wx.Panel(self)
 		nb = wx.Notebook(p)
@@ -215,7 +217,8 @@ class MainWindow(wx.Frame):
 		self.Show(True)
 
 	def onClose(self, event):
-		self.app_master.shutdown()
+		if self.app_master is not None:
+			self.app_master.shutdown()
 		if self.proxy_master is not None:
 			self.proxy_master.shutdown()
 		self.Destroy()
@@ -249,12 +252,16 @@ def main():
 	logger = dnsproxy.MyDNSLogger(frame.dns_tab)
 	thread.start_new_thread(dnsproxy.serveDNS, (logger, frame.main_tab, frame))
 	
-	app_config = proxy.ProxyConfig(port=8080, host=host)
-	app_server = ProxyServer(app_config)
-	app_master = dump.DumpMaster(app_server, dump.Options(app_host='mitm.it', app_port=80, app=True))
-	frame.app_master = app_master
-	thread.start_new_thread(app_master.run, ())
-	
+	try:
+		app_config = proxy.ProxyConfig(port=8080, host=host)
+		app_server = ProxyServer(app_config)
+		app_master = dump.DumpMaster(app_server, dump.Options(app_host='mitm.it', app_port=80, app=True))
+		frame.app_master = app_master
+		thread.start_new_thread(app_master.run, ())
+	except:
+		evt = custom_events.wxStatusEvent(message='Error doing initalizing mitm proxy:\n' + traceback.format_exc() + '\n\nYou probably put in an incorrect IP address in Settings')            
+		wx.PostEvent(frame.main_tab, evt)
+
 	app.MainLoop()
 	
 if __name__ == '__main__':
