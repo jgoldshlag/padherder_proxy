@@ -22,9 +22,10 @@ import custom_events
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
 class PadMaster(flow.FlowMaster):
-	def __init__(self, server, status_ctrl):
+	def __init__(self, server, status_ctrl, region):
 		flow.FlowMaster.__init__(self, server, flow.State())
 		self.status_ctrl = status_ctrl
+		self.region = region
 		#self.start_app('mitm.it', 80)
 
 
@@ -82,7 +83,7 @@ class PadMaster(flow.FlowMaster):
 				content = u"\r\n".join(
 					u"".join(colorful(line)) for line in lines
 				)
-				thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl))
+				thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl, self.region))
 		return f
 
 def serve_app(master):
@@ -170,6 +171,8 @@ class MainWindow(wx.Frame):
 	def __init__(self, parent, title):
 		wx.Frame.__init__(self, parent, title=title, size=(600,600))
 		self.Bind(wx.EVT_CLOSE, self.onClose)
+		self.Bind(custom_events.EVT_DNS_EVENT, self.onDNSEvent)
+		self.proxy_master = None
 		
 		p = wx.Panel(self)
 		nb = wx.Notebook(p)
@@ -190,29 +193,38 @@ class MainWindow(wx.Frame):
 
 	def onClose(self, event):
 		self.app_master.shutdown()
-		self.proxy_master.shutdown()
+		if self.proxy_master is not None:
+			self.proxy_master.shutdown()
 		self.Destroy()
+	
+	def onDNSEvent(self, event):
+		if self.proxy_master is not None:
+			self.proxy_master.shutdown()
+		
+		if event.message.startswith('api-na'):
+			region = 'NA'
+		else:
+			region = 'JP'
+		proxy_config = proxy.ProxyConfig(port=443, host=socket.gethostbyname(socket.gethostname()), mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
+		proxy_server = ProxyServer(proxy_config)
+		self.proxy_master = PadMaster(proxy_server, self.main_tab, region)
+		thread.start_new_thread(self.proxy_master.run, ())
+
 
 def main():
 	app = wx.App(False)
 	config = wx.Config("padherder_proxy")
 	wx.ConfigBase.Set(config)
 	frame = MainWindow(None, "Padherder Proxy")
-	
+		
 	logger = dnsproxy.MyDNSLogger(frame.dns_tab)
-	thread.start_new_thread(dnsproxy.serveDNS, (logger, frame.main_tab))
+	thread.start_new_thread(dnsproxy.serveDNS, (logger, frame.main_tab, frame))
 	
 	app_config = proxy.ProxyConfig(port=8080, host=socket.gethostbyname(socket.gethostname()))
 	app_server = ProxyServer(app_config)
 	app_master = dump.DumpMaster(app_server, dump.Options(app_host='mitm.it', app_port=80, app=True))
 	frame.app_master = app_master
 	thread.start_new_thread(app_master.run, ())
-	
-	proxy_config = proxy.ProxyConfig(port=443, host=socket.gethostbyname(socket.gethostname()), mode='reverse', upstream_server=cmdline.parse_server_spec('https://api-na-iosv2.padsv.gungho.jp:443/'))
-	proxy_server = ProxyServer(proxy_config)
-	proxy_master = PadMaster(proxy_server, frame.main_tab)
-	frame.proxy_master = proxy_master
-	thread.start_new_thread(proxy_master.run, ())
 	
 	app.MainLoop()
 	

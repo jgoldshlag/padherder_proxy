@@ -83,7 +83,7 @@ def add_status_msg(msg, status_ctrl):
 	evt = custom_events.wxStatusEvent(message=msg)            
 	wx.PostEvent(status_ctrl, evt)
 
-def do_sync(raw_captured_data, status_ctrl):
+def do_sync(raw_captured_data, status_ctrl, region):
 	config = wx.ConfigBase.Get()
 	session = requests.Session()
 	session.auth = (config.Read("username"), config.Read("password"))
@@ -98,7 +98,7 @@ def do_sync(raw_captured_data, status_ctrl):
 	us_to_jp_map = {}
 	monster_data = {}
 	for monster in raw_monster_data:
-		if 'us_id' in monster:
+		if region != 'JP' and 'us_id' in monster:
 			us_to_jp_map[monster['us_id']] = monster['id']
 		monster_data[monster['id']] = monster
 

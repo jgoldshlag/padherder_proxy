@@ -90,7 +90,7 @@ class InterceptResolver(BaseResolver):
 		matching local records
 	"""
 
-	def __init__(self,address,port,ttl, status_ctrl):
+	def __init__(self,address,port,ttl, status_ctrl, main_frame):
 		"""
 			address/port	- upstream server
 			ttl				- default ttl for intercept records
@@ -99,6 +99,7 @@ class InterceptResolver(BaseResolver):
 		self.port = port
 		self.ttl = parse_time(ttl)
 		self.status_ctrl = status_ctrl
+		self.main_frame = main_frame
 
 	def resolve(self,request,handler):
 		reply = request.reply()
@@ -106,8 +107,11 @@ class InterceptResolver(BaseResolver):
 		qtype = QTYPE[request.q.qtype]
 		if qname.matchGlob("api-*padsv.gungho.jp."):
 			reply.add_answer(RR(qname,QTYPE.A,rdata=A(socket.gethostbyname(socket.gethostname()))))
-			evt = custom_events.wxStatusEvent(message="Got DNS Request")            
+			evt = custom_events.wxStatusEvent(message="Got DNS Request")
 			wx.PostEvent(self.status_ctrl,evt)
+			evt = custom_events.wxDNSEvent(message=str(qname)[:-1])
+			wx.PostEvent(self.main_frame,evt)
+			time.sleep(0.5) # we need to sleep until the proxy is up, half a second should do it...
 		# Otherwise proxy
 		if not reply.rr:
 			if handler.protocol == 'udp':
@@ -117,14 +121,15 @@ class InterceptResolver(BaseResolver):
 			reply = DNSRecord.parse(proxy_r)
 		return reply
 
-def serveDNS(logger, status_ctrl):
+def serveDNS(logger, status_ctrl, main_frame):
 	
 	evt = custom_events.wxStatusEvent(message="proxy started")            
 	wx.PostEvent(status_ctrl,evt)
 	resolver = InterceptResolver('8.8.8.8',
 								 53,
 								 '60s',
-								 status_ctrl)
+								 status_ctrl,
+								 main_frame)
 	
 	DNSHandler.log = { 
 		'log_request',		# DNS Request
