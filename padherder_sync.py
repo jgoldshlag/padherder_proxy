@@ -6,6 +6,7 @@ import sys
 import json
 import wx
 import custom_events
+import traceback
 
 __version__ = '0.1'
 
@@ -79,155 +80,197 @@ def get_cached_data(session, cache_time, cache_path, url):
 
 #{"id": 6478849, "url": "https://www.padherder.com/user-api/monster/6478849/", "pad_id": 85462, "monster": 2516, "note": "", "priority": 1, "current_xp": 656, "current_skill": 1, "current_awakening": 0, "target_level": 99, "target_evolution": null, "plus_hp": 0, "plus_atk": 0, "plus_rcv": 1, "latent1": 0, "latent2": 0, "latent3": 0, "latent4": 0, "latent5": 0}
 
+LATENT_BIT_TO_PH_ID = {
+2: 1, #+hp
+4: 2, #+atk
+6: 3, #+rcv ????
+8: 4, #move time
+10: 5, #auto-heal
+12: 6, # fire resist
+14: 7, # water resist
+16: 8, # green resist
+20: 9, # dark resist
+18: 10, # light resist
+22: 11, #skill block resist (not on padherder yet)
+}
+
+def get_latents(num):
+	num = num >> 3
+	latents = []
+	while num > 0:
+		l = num & 0b11111
+		num = num >> 5
+		if not l in LATENT_BIT_TO_PH_ID:
+			print "Unknown latent %d" % l
+			continue
+		latents.append(LATENT_BIT_TO_PH_ID[l])
+	
+	ret = {}
+	for i in range(5):
+		if i < len(latent):
+			ret["latent%d" % i] = latent[i]
+		else:
+			ret["latent%d" % i] = 0
+	return ret
+
+#{u'priority': 3, u'plus_rcv': 1, u'monster': 1223, u'current_skill': 1, u'url': u'https://www.padherder.com/user-api/monster/6497838/', u'latent1': 1, u'latent2': 3, u'note': u'For A Freyja', u'plus_hp': 0, u'latent3': 8, u'plus_atk': 0, u'current_awakening': 0, u'latent4': 4, u'pad_id': 85628, u'current_xp': 0, u'latent5': 5, u'target_level': 2, u'id': 6497838, u'target_evolution': None}
+
 def add_status_msg(msg, status_ctrl):
 	evt = custom_events.wxStatusEvent(message=msg)            
 	wx.PostEvent(status_ctrl, evt)
 
 def do_sync(raw_captured_data, status_ctrl, region):
-	config = wx.ConfigBase.Get()
-	session = requests.Session()
-	session.auth = (config.Read("username"), config.Read("password"))
-	#session.verify = 'cacert.pem'
-	session.headers = headers
-	# Limit the session to a single concurrent connection
-	session.mount('http://', requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1))
-	session.mount('https://', requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1))
+	try:
+		config = wx.ConfigBase.Get()
+		session = requests.Session()
+		session.auth = (config.Read("username"), config.Read("password"))
+		#session.verify = 'cacert.pem'
+		session.headers = headers
+		# Limit the session to a single concurrent connection
+		session.mount('http://', requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1))
+		session.mount('https://', requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1))
 
-	raw_monster_data = get_cached_data(session, 8, os.path.join(module_path(), 'monster_data.pickle'), URL_MONSTER_DATA)
-	# Build monster data map and us->jp mapping
-	us_to_jp_map = {}
-	monster_data = {}
-	for monster in raw_monster_data:
-		if region != 'JP' and 'us_id' in monster:
-			us_to_jp_map[monster['us_id']] = monster['id']
-		monster_data[monster['id']] = monster
+		raw_monster_data = get_cached_data(session, 8, os.path.join(module_path(), 'monster_data.pickle'), URL_MONSTER_DATA)
+		# Build monster data map and us->jp mapping
+		us_to_jp_map = {}
+		monster_data = {}
+		for monster in raw_monster_data:
+			if region != 'JP' and 'us_id' in monster:
+				us_to_jp_map[monster['us_id']] = monster['id']
+			monster_data[monster['id']] = monster
 
-	add_status_msg("Downloaded full monster data", status_ctrl)
-	r = session.get(URL_USER_DETAILS % (session.auth[0]))
-	if r.status_code != requests.codes.ok:
-		print 'failed: %s' % (r.status_code)
-		return
-	
-	raw_user_data = json.loads(r.content)
-	existing_monsters = {}
-	unknown_pad_id_monsters = {}
-	for monster in raw_user_data['monsters']:
-		if monster['pad_id'] == 0:
-			unknown_pad_id_monsters[monster['id']] = monster
-		else:
-			existing_monsters[monster['pad_id']] = monster
-			
-	material_map = {}
-	for material in raw_user_data['materials']:
-		material_map[material['monster']] = material
-
-	add_status_msg("Downloaded current padherder box", status_ctrl)
-	captured_data = json.loads(raw_captured_data)
-	
-	material_counts = {}
-	for mon_array in captured_data['card']:
-		jp_id = us_to_jp_map.get(mon_array[5], mon_array[5])
-		# Update material counts
-		if jp_id in material_map:
-			material_counts[jp_id] = material_counts.get(jp_id, 0) + 1
-			
-		if not jp_id in monster_data:
-			if mon_array[0] in existing_monsters:
-				del existing_monsters[mon_array[0]]
-			add_status_msg('Got monster in box that is not in padherder: id = %d' % (jp_id), status_ctrl)
-			continue
-			
-		base_data = monster_data[jp_id]
-			
-		if base_data['type'] in (0, 12, 14):
-			continue
-
-		# Cap card XP to monster's max XP
-		mon_array[1] = min(mon_array[1], xp_at_level(base_data['xp_curve'], base_data['max_level']))
-		# Cap card awakening to monster's max awoken level
-		mon_array[9] = min(mon_array[9], len(base_data['awoken_skills']))
+		add_status_msg("Downloaded full monster data", status_ctrl)
+		r = session.get(URL_USER_DETAILS % (session.auth[0]))
+		if r.status_code != requests.codes.ok:
+			print 'failed: %s' % (r.status_code)
+			return
 		
-		if mon_array[0] in existing_monsters:
-			existing_data = existing_monsters.get(mon_array[0])
-			if mon_array[1] > existing_data['current_xp'] or \
-			   mon_array[3] > existing_data['current_skill'] or \
-			   mon_array[5] != existing_data['monster'] or \
-			   mon_array[6] > existing_data['plus_hp'] or \
-			   mon_array[7] > existing_data['plus_atk'] or \
-			   mon_array[8] > existing_data['plus_rcv'] or \
-			   mon_array[9] > existing_data['current_awakening']:
-				update_data = {}
-				update_data['monster'] = mon_array[5]
-				if mon_array[1] > existing_data['current_xp']:
-					update_data['current_xp'] = mon_array[1]
-				if mon_array[3] > existing_data['current_skill']:
-					update_data['current_skill'] = mon_array[3]
-				if mon_array[5] > existing_data['monster']:
-					update_data['current_skill'] = mon_array[3]
-					update_data['current_xp'] = mon_array[1]
-					update_data['current_awakening'] = mon_array[9]
-				if mon_array[6] > existing_data['plus_hp']:
-					update_data['plus_hp'] = mon_array[6]
-				if mon_array[7] > existing_data['plus_atk']:
-					update_data['plus_atk'] = mon_array[7]
-				if mon_array[8] > existing_data['plus_rcv']:
-					update_data['plus_rcv'] = mon_array[8]
-				if mon_array[9] > existing_data['current_awakening']:
-					update_data['current_awakening'] = mon_array[9]
-				
-				r = session.patch(existing_data['url'], update_data)
-				if r.status_code == requests.codes.ok:
-					add_status_msg('Updated monster %s (id %d): %s' % (base_data['name'], existing_data['id'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
-				else:
-					add_status_msg('Failed updating monster %s (id %d): %s %s' % (base_data['name'], existing_data['id'], r.status_code, r.content), status_ctrl)
-				
-			del existing_monsters[mon_array[0]]
-		else:
-			# first, we need to try matching against the non-id monsters
-			found_id = None
-			mon_url = None
-			for mon_id, mon in unknown_pad_id_monsters.items():
-				if mon['monster'] == jp_id:
-					found_id = mon_id
-					mon_url = mon['url']
-					mon_name = mon['name']
-					break
-			update_data = {'monster': jp_id, 'pad_id': mon_array[0], 'current_xp': mon_array[1], 'current_skill': mon_array[3], 'plus_hp': mon_array[6], 'plus_atk': mon_array[7], 'plus_rcv': mon_array[8], 'current_awakening': mon_array[9]}
-			if found_id is not None:
-				del unknown_pad_id_monsters[found_id]
-				r = session.patch(mon_url, update_data)
-				if r.status_code == requests.codes.ok:
-					add_status_msg('Updated monster %s (id %d): %s' % (mon_name, jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
-				else:
-					add_status_msg('Failed updating monster %s (id %d): %s %s' % (mon_name, jp_id, r.status_code, r.content), status_ctrl)
+		raw_user_data = json.loads(r.content)
+		existing_monsters = {}
+		unknown_pad_id_monsters = {}
+		for monster in raw_user_data['monsters']:
+			if monster['pad_id'] == 0:
+				unknown_pad_id_monsters[monster['id']] = monster
 			else:
-				r = session.post(URL_MONSTER_CREATE, update_data)
+				existing_monsters[monster['pad_id']] = monster
+				
+		material_map = {}
+		for material in raw_user_data['materials']:
+			material_map[material['monster']] = material
+
+		add_status_msg("Downloaded current padherder box", status_ctrl)
+		captured_data = json.loads(raw_captured_data)
+		
+		material_counts = {}
+		for mon_array in captured_data['card']:
+			jp_id = us_to_jp_map.get(mon_array[5], mon_array[5])
+			# Update material counts
+			if jp_id in material_map:
+				material_counts[jp_id] = material_counts.get(jp_id, 0) + 1
+				
+			if not jp_id in monster_data:
+				if mon_array[0] in existing_monsters:
+					del existing_monsters[mon_array[0]]
+				add_status_msg('Got monster in box that is not in padherder: id = %d' % (jp_id), status_ctrl)
+				continue
+				
+			base_data = monster_data[jp_id]
+				
+			if base_data['type'] in (0, 12, 14):
+				continue
+
+			# Cap card XP to monster's max XP
+			mon_array[1] = min(mon_array[1], xp_at_level(base_data['xp_curve'], base_data['max_level']))
+			# Cap card awakening to monster's max awoken level
+			mon_array[9] = min(mon_array[9], len(base_data['awoken_skills']))
+			#latents = get_latents(mon_array[10])
+			
+			if mon_array[0] in existing_monsters:
+				existing_data = existing_monsters.get(mon_array[0])
+				if mon_array[1] > existing_data['current_xp'] or \
+				   mon_array[3] > existing_data['current_skill'] or \
+				   mon_array[5] != existing_data['monster'] or \
+				   mon_array[6] > existing_data['plus_hp'] or \
+				   mon_array[7] > existing_data['plus_atk'] or \
+				   mon_array[8] > existing_data['plus_rcv'] or \
+				   mon_array[9] > existing_data['current_awakening']:# or \
+					#len(latents.viewitems() & existing_data) > 0:
+					update_data = {}
+					update_data['monster'] = mon_array[5]
+					if mon_array[1] > existing_data['current_xp']:
+						update_data['current_xp'] = mon_array[1]
+					if mon_array[3] > existing_data['current_skill']:
+						update_data['current_skill'] = mon_array[3]
+					if mon_array[5] > existing_data['monster']:
+						update_data['current_skill'] = mon_array[3]
+						update_data['current_xp'] = mon_array[1]
+						update_data['current_awakening'] = mon_array[9]
+					if mon_array[6] > existing_data['plus_hp']:
+						update_data['plus_hp'] = mon_array[6]
+					if mon_array[7] > existing_data['plus_atk']:
+						update_data['plus_atk'] = mon_array[7]
+					if mon_array[8] > existing_data['plus_rcv']:
+						update_data['plus_rcv'] = mon_array[8]
+					if mon_array[9] > existing_data['current_awakening']:
+						update_data['current_awakening'] = mon_array[9]
+					#if len(latents.viewitems() & existing_data) > 0:
+					#	update_data.update(latents)
+					
+					r = session.patch(existing_data['url'], update_data)
+					if r.status_code == requests.codes.ok:
+						add_status_msg('Updated monster %s (id %d): %s' % (base_data['name'], existing_data['id'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					else:
+						add_status_msg('Failed updating monster %s (id %d): %s %s' % (base_data['name'], existing_data['id'], r.status_code, r.content), status_ctrl)
+					
+				del existing_monsters[mon_array[0]]
+			else:
+				# first, we need to try matching against the non-id monsters
+				found_id = None
+				mon_url = None
+				for mon_id, mon in unknown_pad_id_monsters.items():
+					if mon['monster'] == jp_id:
+						found_id = mon_id
+						mon_url = mon['url']
+						mon_name = mon['name']
+						break
+				update_data = {'monster': jp_id, 'pad_id': mon_array[0], 'current_xp': mon_array[1], 'current_skill': mon_array[3], 'plus_hp': mon_array[6], 'plus_atk': mon_array[7], 'plus_rcv': mon_array[8], 'current_awakening': mon_array[9]}
+				if found_id is not None:
+					del unknown_pad_id_monsters[found_id]
+					r = session.patch(mon_url, update_data)
+					if r.status_code == requests.codes.ok:
+						add_status_msg('Updated monster %s (id %d): %s' % (mon_name, jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					else:
+						add_status_msg('Failed updating monster %s (id %d): %s %s' % (mon_name, jp_id, r.status_code, r.content), status_ctrl)
+				else:
+					r = session.post(URL_MONSTER_CREATE, update_data)
+					if r.status_code == requests.codes.ok or r.status_code == 201:
+						add_status_msg('Created monster %s: %s' % (monster_data[jp_id]['name'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					else:
+						add_status_msg('Failed creating monster %s: %s %s' % (monster_data[jp_id]['name'], r.status_code, r.content), status_ctrl)
+		
+		for mon in existing_monsters.values():
+			r = session.delete(mon['url'])
+
+			if r.status_code == 204:
+				add_status_msg('Removed monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
+			else:
+				add_status_msg('Failed to remove monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
+		
+		# Maybe update materials
+		for monster_id, material in material_map.items():
+			new_count = material_counts.get(monster_id, 0)
+			if new_count != material['count']:
+				data = dict(count=new_count)
+				r = session.patch(material['url'], data)
 				if r.status_code == requests.codes.ok or r.status_code == 201:
-					add_status_msg('Created monster %s: %s' % (monster_data[jp_id]['name'], ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+					add_status_msg('Updated material %s from %d to %d' % (monster_data[monster_id]['name'], material['count'], new_count), status_ctrl)
 				else:
-					add_status_msg('Failed creating monster %s: %s %s' % (monster_data[jp_id]['name'], r.status_code, r.content), status_ctrl)
-	
-	for mon in existing_monsters.values():
-		r = session.delete(mon['url'])
-
-		if r.status_code == 204:
-			add_status_msg('Removed monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
-		else:
-			add_status_msg('Failed to remove monster %s (id %d)' % (monster_data[mon['monster']]['name'], mon['id']), status_ctrl)
-	
-	# Maybe update materials
-	for monster_id, material in material_map.items():
-		new_count = material_counts.get(monster_id, 0)
-		if new_count != material['count']:
-			data = dict(count=new_count)
-			r = session.patch(material['url'], data)
-			if r.status_code == requests.codes.ok or r.status_code == 201:
-				add_status_msg('Updated material %s from %d to %d' % (monster_data[monster_id]['name'], material['count'], new_count), status_ctrl)
-			else:
-				add_status_msg('Failed updating material %s: %s %s' % (monster_data[monster_id]['name'], r.status_code, r.content), status_ctrl)
+					add_status_msg('Failed updating material %s: %s %s' % (monster_data[monster_id]['name'], r.status_code, r.content), status_ctrl)
 
 
-	add_status_msg('Done', status_ctrl)
+		add_status_msg('Done', status_ctrl)
+	except:
+		add_status_msg('Error doing sync:\n' + traceback.format_exc() + '\n\nPlease report this error on github', status_ctrl)
 
 			
 def find_unknown_xp_curves(config):
