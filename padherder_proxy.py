@@ -104,7 +104,7 @@ class MainTab(wx.Panel):
 		config = wx.ConfigBase.Get()
 		host = config.Read("host") or socket.gethostbyname(socket.gethostname())
 
-		start_instructions = wx.StaticText(self, label="Just the first time, you need to add the HTTPS certificate to your iOS device.\nTo do this, go to your wifi settings and set up a manual HTTP proxy.\nSet the server to '%s' and the port to 8080. Then visit http://mitm.it in Safari,\nclick the iOS link, and install the configuration profile when asked.\nAfter this is done, turn off the HTTP proxy." % host)
+		start_instructions = wx.StaticText(self, label="Just the first time, you need to add the HTTPS certificate to your iOS/Android device.\nTo do this, go to your wifi settings and set up a manual HTTP proxy.\nSet the server to '%s' and the port to 8080. Then visit http://mitm.it in Safari,\nclick the link for your device, and install the configuration profile when asked.\nAfter this is done, turn off the HTTP proxy." % host)
 		grid.Add(start_instructions, pos=(0,0))
 		
 		dns_instructions = wx.StaticText(self, label="To synchronize your box with padherder, enter your padherder username and password in Settings.\nThen go to your wifi settings and change your DNS server to '%s'. Then press the home button.\nIf you switch to the DNS Proxy Log tab, you should see a bunch of log lines.\nMake sure Puzzle and Dragons is completely closed, and re-open it.\nOnce you get in game, close PAD completely again and restore your DNS settings." % host)
