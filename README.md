@@ -10,7 +10,7 @@ requests (pip install requests)
 
 dnslib (pip install dnslib)
 
-wxpython (pip install wxpython)
+wxpython (install from their site - http://wxpython.org)
 
 
 # Usage
