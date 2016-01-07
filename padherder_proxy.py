@@ -21,7 +21,7 @@ import dnsproxy
 import padherder_sync
 import custom_events
 
-PH_PROXY_VERSION = "1.5"
+PH_PROXY_VERSION = "1.6"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
