@@ -13,12 +13,15 @@ import re
 from libmproxy import controller, proxy, flow, dump, cmdline, contentviews
 from libmproxy.proxy.server import ProxyServer
 import wx
+import wx.lib.hyperlink as hl  
 from urlparse import urljoin
 import traceback
 
 import dnsproxy
 import padherder_sync
 import custom_events
+
+PH_PROXY_VERSION = "1.5"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
@@ -123,6 +126,10 @@ class MainTab(wx.Panel):
 			self.status_ctrl.AppendText("You need to set your padherder password in Settings\n")
 		
 		grid.Add(self.status_ctrl, pos=(3,0), span=(1,2))
+		
+		if is_out_of_date(self):
+			updateCtrl = hl.HyperLinkCtrl(self, wx.ID_ANY, label="An updated version is available", URL="https://github.com/jgoldshlag/padherder_proxy")
+			grid.Add(updateCtrl, pos=(4,0), span=(1,2))
 		
 		self.SetSizer(grid)
 		
@@ -240,7 +247,27 @@ class MainWindow(wx.Frame):
 		self.proxy_master = PadMaster(proxy_server, self.main_tab, region)
 		thread.start_new_thread(self.proxy_master.run, ())
 
-
+def is_out_of_date(main_tab):
+	session = requests.Session()
+	session.headers = { 'accept': 'application/vnd.github.v3+json',
+						'user-agent': 'jgoldshlag-padherder_sync_' + PH_PROXY_VERSION,
+					  }
+	
+	session.mount('https://', requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1))
+	r = session.get('https://api.github.com/repos/jgoldshlag/padherder_proxy/releases')
+	if r.status_code != requests.codes.ok:
+		evt = custom_events.wxStatusEvent(message='Error checking for updates: %s %s' % (r.status_code, r.content))            
+		wx.PostEvent(main_tab, evt)
+	
+	releases = json.loads(r.content)
+	current_ver = float(PH_PROXY_VERSION)
+	for rel in releases:
+		rel_version = float(rel['tag_name'][1:])
+		if rel_version > current_ver:
+			return True
+	
+	return False
+	
 def main():
 	app = wx.App(False)
 	config = wx.Config("padherder_proxy")
