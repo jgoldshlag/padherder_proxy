@@ -231,16 +231,15 @@ def do_sync(raw_captured_data, status_ctrl, region):
 					if mon['monster'] == jp_id:
 						found_id = mon_id
 						mon_url = mon['url']
-						mon_name = mon['name']
 						break
 				update_data = {'monster': jp_id, 'pad_id': mon_array[0], 'current_xp': mon_array[1], 'current_skill': mon_array[3], 'plus_hp': mon_array[6], 'plus_atk': mon_array[7], 'plus_rcv': mon_array[8], 'current_awakening': mon_array[9]}
 				if found_id is not None:
 					del unknown_pad_id_monsters[found_id]
 					r = session.patch(mon_url, update_data)
 					if r.status_code == requests.codes.ok:
-						add_status_msg('Updated monster %s (id %d): %s' % (mon_name, jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
+						add_status_msg('Updated monster %s (id %d): %s' % (monster_data[jp_id]['name'], jp_id, ', '.join(k for k in update_data.keys() if k != 'monster')), status_ctrl)
 					else:
-						add_status_msg('Failed updating monster %s (id %d): %s %s' % (mon_name, jp_id, r.status_code, r.content), status_ctrl)
+						add_status_msg('Failed updating monster %s (id %d): %s %s' % (monster_data[jp_id]['name'], jp_id, r.status_code, r.content), status_ctrl)
 				else:
 					r = session.post(URL_MONSTER_CREATE, update_data)
 					if r.status_code == requests.codes.ok or r.status_code == 201:
