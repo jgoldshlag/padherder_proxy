@@ -272,7 +272,7 @@ def main():
 	app = wx.App(False)
 	config = wx.Config("padherder_proxy")
 	wx.ConfigBase.Set(config)
-	frame = MainWindow(None, "Padherder Proxy")
+	frame = MainWindow(None, "Padherder Proxy v%s" % PH_PROXY_VERSION)
 	
 	host = config.Read("host") or socket.gethostbyname(socket.gethostname())
 	
