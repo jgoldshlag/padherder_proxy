@@ -17,6 +17,7 @@ SYNC_ADD = "add"
 SYNC_UPDATE = "update"
 SYNC_UPDATE_MATERIAL = "update_material"
 SYNC_DELETE = "delete"
+SYNC_UPDATE_RANK = "update_rank"
 
 SYNC_ACTION_ALLOW = "Allow"
 SYNC_ACTION_SKIP = "Skip"
