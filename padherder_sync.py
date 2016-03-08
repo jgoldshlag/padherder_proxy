@@ -15,6 +15,7 @@ API_ENDPOINT = 'https://www.padherder.com/user-api'
 URL_MONSTER_DATA = 'https://www.padherder.com/api/monsters/'
 URL_ACTIVE_SKILLS = 'https://www.padherder.com/api/active_skills/'
 URL_USER_DETAILS = '%s/user/%%s/' % (API_ENDPOINT)
+URL_USER_PROFILE = '%s/profile/%%s/' % (API_ENDPOINT)
 URL_MONSTER_CREATE = '%s/monster/' % (API_ENDPOINT)
 
 
@@ -137,6 +138,12 @@ class SyncRecord:
                 return 'Removed monster %s' % (self.base_data['name'])
             else:
                 return 'Failed to remove monster %s' % (self.base_data['name'])
+        elif self.operation == SYNC_UPDATE_RANK:
+            r = session.patch(self.url, dict(rank=self.base_data))
+            if r.status_code == requests.codes.ok:
+                return 'Updated rank'
+            else:
+                return 'Failed updating rank'
         else:
             return "Internal error: unknown operation"
         
@@ -289,6 +296,10 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
             new_count = material_counts.get(monster_id, 0)
             if new_count != material['count']:
                 sync_records.append(SyncRecord(SYNC_UPDATE_MATERIAL, monster_data[monster_id], dict(count=new_count, old_count=material['count']), material['url']))
+
+        # Maybe update rank
+        if captured_data['lv'] != raw_user_data['profile']['rank']:
+            sync_records.append(SyncRecord(SYNC_UPDATE_RANK, captured_data['lv'], url=URL_USER_PROFILE % raw_user_data['profile']['id']))
 
 
         # and run the syncs
