@@ -240,14 +240,14 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
                 existing_data = existing_monsters.get(mon_array[0])
                 if mon_array[1] > existing_data['current_xp'] or \
                    mon_array[3] > existing_data['current_skill'] or \
-                   mon_array[5] != existing_data['monster'] or \
+                   jp_id != existing_data['monster'] or \
                    mon_array[6] > existing_data['plus_hp'] or \
                    mon_array[7] > existing_data['plus_atk'] or \
                    mon_array[8] > existing_data['plus_rcv'] or \
                    mon_array[9] > existing_data['current_awakening'] or \
                    len(latents.viewitems() - existing_data.viewitems()) > 0:
                     update_data = {}
-                    update_data['monster'] = mon_array[5]
+                    update_data['monster'] = jp_id
                     if mon_array[1] > existing_data['current_xp']:
                         update_data['current_xp'] = mon_array[1]
                     if mon_array[3] > existing_data['current_skill']:
