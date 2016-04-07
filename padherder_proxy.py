@@ -23,7 +23,7 @@ import padherder_sync
 import custom_events
 from constants import *
 
-PH_PROXY_VERSION = "1.10"
+PH_PROXY_VERSION = "2.0"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
