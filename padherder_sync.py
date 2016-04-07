@@ -78,8 +78,8 @@ LATENT_BIT_TO_PH_ID = {
 12: 6, # fire resist
 14: 7, # water resist
 16: 8, # green resist
-20: 9, # dark resist
-18: 10, # light resist
+18: 9, # dark resist
+20: 10, # light resist
 22: 11, # skill block resist
 }
 
@@ -289,6 +289,7 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
                     sync_records.append(SyncRecord(SYNC_ADD, base_data, update_data, None))
         
         for mon in existing_monsters.values():
+            base_data = monster_data[mon['monster']]
             sync_records.append(SyncRecord(SYNC_DELETE, base_data, None, mon['url']))
         
         # Maybe update materials
@@ -386,6 +387,14 @@ PDX_IDS = {v['pdx_id']: k for k, v in MONSTER_IDS.items() }
 US_IDS = {v['us_id']: k for k, v in MONSTER_IDS.items() }
 
 if __name__ == '__main__':
+    app = wx.App(False)
+    config = wx.Config("padherder_proxy_testing")
+    wx.ConfigBase.Set(config)
+    
+    find_unknown_xp_curves(config)
+    
+    sys.exit(1)
+    
     session = requests.Session()
     session.headers = headers
     # Limit the session to a single concurrent connection
@@ -412,9 +421,6 @@ if __name__ == '__main__':
     contents = f.read()
     f.close()
     
-    app = wx.App(False)
-    config = wx.Config("padherder_proxy_testing")
-    wx.ConfigBase.Set(config)
     
     config.Write("username", sys.argv[2])
     config.Write("password", sys.argv[3])
