@@ -232,37 +232,37 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
             mon_array[9] = min(mon_array[9], len(base_data['awoken_skills']))
             # cap skill to monster's max skill
             if 'max_skill' in base_data:
-                mon_array[3] = min(mon_array[3], base_data['max_skill'])
+                mon_array[3] = min(mon_array[3], base_data['max_skill'] + 1)
             
             latents = get_latents(mon_array[10])
             
             if mon_array[0] in existing_monsters:
                 existing_data = existing_monsters.get(mon_array[0])
-                if mon_array[1] > existing_data['current_xp'] or \
-                   mon_array[3] > existing_data['current_skill'] or \
+                if mon_array[1] != existing_data['current_xp'] or \
+                   mon_array[3] != existing_data['current_skill'] or \
                    jp_id != existing_data['monster'] or \
-                   mon_array[6] > existing_data['plus_hp'] or \
-                   mon_array[7] > existing_data['plus_atk'] or \
-                   mon_array[8] > existing_data['plus_rcv'] or \
-                   mon_array[9] > existing_data['current_awakening'] or \
+                   mon_array[6] != existing_data['plus_hp'] or \
+                   mon_array[7] != existing_data['plus_atk'] or \
+                   mon_array[8] != existing_data['plus_rcv'] or \
+                   mon_array[9] != existing_data['current_awakening'] or \
                    len(latents.viewitems() - existing_data.viewitems()) > 0:
                     update_data = {}
                     update_data['monster'] = jp_id
-                    if mon_array[1] > existing_data['current_xp']:
+                    if mon_array[1] != existing_data['current_xp']:
                         update_data['current_xp'] = mon_array[1]
-                    if mon_array[3] > existing_data['current_skill']:
+                    if mon_array[3] != existing_data['current_skill']:
                         update_data['current_skill'] = mon_array[3]
-                    if mon_array[5] > existing_data['monster']:
+                    if mon_array[5] != existing_data['monster']:
                         update_data['current_skill'] = mon_array[3]
                         update_data['current_xp'] = mon_array[1]
                         update_data['current_awakening'] = mon_array[9]
-                    if mon_array[6] > existing_data['plus_hp']:
+                    if mon_array[6] != existing_data['plus_hp']:
                         update_data['plus_hp'] = mon_array[6]
-                    if mon_array[7] > existing_data['plus_atk']:
+                    if mon_array[7] != existing_data['plus_atk']:
                         update_data['plus_atk'] = mon_array[7]
-                    if mon_array[8] > existing_data['plus_rcv']:
+                    if mon_array[8] != existing_data['plus_rcv']:
                         update_data['plus_rcv'] = mon_array[8]
-                    if mon_array[9] > existing_data['current_awakening']:
+                    if mon_array[9] != existing_data['current_awakening']:
                         update_data['current_awakening'] = mon_array[9]
                     if len(latents.viewitems() - existing_data.viewitems()) > 0:
                         update_data.update(latents)
