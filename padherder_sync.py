@@ -175,14 +175,14 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
         
         raw_monster_data = get_cached_data(session, 8, os.path.join(module_path(), 'monster_data.pickle'), URL_MONSTER_DATA)
         # Build monster data map and us->jp mapping
-        us_to_jp_map = {}
-        monster_data = {}
         for monster in raw_monster_data:
             if region != 'JP' and 'us_id' in monster:
-                us_to_jp_map[monster['us_id']] = monster['id']
+                status_ctrl.us_to_jp_map[monster['us_id']] = monster['id']
             if monster['active_skill'] in max_skill:
                 monster['max_skill'] = max_skill[monster['active_skill']]
-            monster_data[monster['id']] = monster
+            status_ctrl.monster_data[monster['id']] = monster
+        us_to_jp_map = status_ctrl.us_to_jp_map
+        monster_data = status_ctrl.monster_data
         add_status_msg("Downloaded full monster data", status_ctrl)
         
         

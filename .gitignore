@@ -10,3 +10,4 @@ dist
 padherder_proxy.spec
 captured_data.txt
 active_skills.pickle
+captured_mail.txt

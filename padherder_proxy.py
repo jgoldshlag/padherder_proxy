@@ -23,15 +23,18 @@ import dnsproxy
 import padherder_sync
 import custom_events
 from constants import *
+from mail_parser import *
+import datetime
 
-PH_PROXY_VERSION = "2.1"
+PH_PROXY_VERSION = "2.2"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
 class PadMaster(flow.FlowMaster):
-    def __init__(self, server, status_ctrl, region):
+    def __init__(self, server, main_window, region):
         flow.FlowMaster.__init__(self, server, flow.State())
-        self.status_ctrl = status_ctrl
+        self.status_ctrl = main_window.main_tab
+        self.mail_tab = main_window.mail_tab
         self.region = region
         #self.start_app('mitm.it', 80)
 
@@ -95,6 +98,32 @@ class PadMaster(flow.FlowMaster):
                 cap.write(content)
                 cap.close()
                 thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl, self.region))
+            if f.request.path.startswith('/api.php?action=get_user_mail'):
+                resp = f.response.content
+                type, lines = contentviews.get_content_view(
+                    contentviews.get("Raw"),
+                    f.response.content,
+                    headers=f.response.headers)
+
+                def colorful(line):
+                    for (style, text) in line:
+                        yield text
+                        
+                content = u"\r\n".join(
+                    u"".join(colorful(line)) for line in lines
+                )
+                
+                cap = open('captured_mail.txt', 'w')
+                cap.write(content)
+                cap.close()
+                
+                mails = parse_mail(content)
+                mails.reverse()
+                evt = custom_events.wxMailEvent(mails=mails)
+                wx.PostEvent(self.mail_tab, evt)
+                evt = custom_events.wxStatusEvent(message="Got mail data, processing...")            
+                wx.PostEvent(self.status_ctrl,evt)
+                
         return f
 
 def serve_app(master):
@@ -160,9 +189,69 @@ class MyGridTable(wx.grid.PyGridTableBase):
             attr.SetReadOnly( 1 )
             return attr
         return None
+        
+class MailGridTable(wx.grid.PyGridTableBase):
+    def __init__(self, mails, main_tab):
+        wx.grid.PyGridTableBase.__init__(self)
+        self.mails = mails
+        self.main_tab = main_tab
     
+    def GetNumberRows(self):
+        return len(self.mails)
+
+    def GetNumberCols(self):
+        """Return the number of columns in the grid"""
+        return 6
+
+    def IsEmptyCell(self, row, col):
+        """Return True if the cell is empty"""
+        return False
+
+    def GetValue(self, row, col):
+        mail = self.mails[row]
+        if col == 0:
+            return MAIL_TYPE_MAP[mail.type]
+        elif col == 1:
+            return mail.get_bonus_contents(self.main_tab.monster_data, self.main_tab.us_to_jp_map)
+        elif col == 2:
+            if mail.offered == 0:
+                return "No"
+            else:
+                return "Yes"
+        elif col == 3:
+            if mail.from_id == "0":
+                return "Game Admin"
+            else:
+                return "UserID: %s" % mail.from_id
+        elif col == 4:
+            return mail.subject
+        elif col == 5:
+            now = datetime.datetime.now(Pacific)
+            diff = now - mail.date
+            if diff.days > 0:
+                return "%dd" % diff.days
+            else:
+                return "%dh" % int(diff.seconds / (60 * 60))
+        else:
+            return "UNKNOWN"
+
+    def SetValue(self, row, col, value):
+        pass
+    
+    def GetColLabelValue(self, col):
+        return ['Type', 'Contents', 'Open', 'From', 'Subject', 'Time'][col]
+        
+        
+    def GetAttr(self, row, col, someExtraParameter ):
+        attr = wx.grid.GridCellAttr()
+        attr.SetReadOnly(True)
+        return attr
+
+                
 class MainTab(wx.Panel):
     def __init__(self, parent):
+        self.us_to_jp_map = {}
+        self.monster_data = {}
         wx.Panel.__init__(self, parent)
         grid = wx.GridBagSizer(hgap=5, vgap=10)
 
@@ -292,10 +381,31 @@ class SettingsTab(wx.Panel):
     def onHTTPSPortChange(self, event):
         config = wx.ConfigBase.Get()
         config.Write("httpsport", event.GetString())
-  
+
+class MailTab(wx.Panel):
+    def __init__(self, parent, main_tab):
+        wx.Panel.__init__(self, parent)
+        self.Bind(custom_events.EVT_MAIL_EVENT, self.onMailEvent)
+        self.grid = wx.grid.Grid(self, wx.ID_ANY, size=(-1,-1))
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.grid, 0, wx.EXPAND)
+        self.SetSizer(self.sizer)
+        self.SetAutoLayout(1)
+        self.sizer.Fit(self)
+        self.main_tab = main_tab
+
+    def onMailEvent(self,event):
+        mails = event.mails
+        self.grid_table = MailGridTable(mails, self.main_tab)
+        self.grid.SetTable(self.grid_table)
+        self.grid.AutoSize()
+        self.grid.SetRowLabelSize(40)
+        self.Layout()
+        event.Skip()
+
 class MainWindow(wx.Frame):
     def __init__(self, parent, title):
-        wx.Frame.__init__(self, parent, title=title, size=(600,600))
+        wx.Frame.__init__(self, parent, title=title, size=(750,600))
         self.Bind(wx.EVT_CLOSE, self.onClose)
         self.Bind(custom_events.EVT_DNS_EVENT, self.onDNSEvent)
         self.proxy_master = None
@@ -307,10 +417,12 @@ class MainWindow(wx.Frame):
         self.main_tab = MainTab(nb)
         self.dns_tab = DNSLogTab(nb)
         settings_tab = SettingsTab(nb)
+        self.mail_tab = MailTab(nb, self.main_tab)
         
         nb.AddPage(self.main_tab, "Proxy")
         nb.AddPage(self.dns_tab, "DNS Proxy Log")
         nb.AddPage(settings_tab, "Settings")
+        nb.AddPage(self.mail_tab, "PAD Mail")
         
         sizer = wx.BoxSizer()
         sizer.Add(nb, 1, wx.EXPAND)
@@ -346,7 +458,7 @@ class MainWindow(wx.Frame):
             wx.PostEvent(self.main_tab, evt)
             return
 
-        self.proxy_master = PadMaster(proxy_server, self.main_tab, region)
+        self.proxy_master = PadMaster(proxy_server, self, region)
         thread.start_new_thread(self.proxy_master.run, ())
 
 def is_out_of_date(main_tab):

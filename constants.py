@@ -24,3 +24,11 @@ SYNC_ACTION_ALLOW = "Allow"
 SYNC_ACTION_SKIP = "Skip"
 SYNC_ACTION_DELETE = "Delete"
 SYNC_ACTION_IGNORE = "Ignore"
+
+MAIL_TYPE_MAP = {
+    0: 'Friend Request',
+    3: 'Gift',
+    4: 'Friend Message',
+    5: 'Best Friend Request',
+    6: 'Memorial Roll',
+}
