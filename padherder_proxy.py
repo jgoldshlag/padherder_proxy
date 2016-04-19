@@ -26,7 +26,7 @@ from constants import *
 from mail_parser import *
 import datetime
 
-PH_PROXY_VERSION = "2.2"
+PH_PROXY_VERSION = "2.3"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
 
@@ -247,7 +247,6 @@ class MailGridTable(wx.grid.PyGridTableBase):
         attr.SetReadOnly(True)
         return attr
 
-                
 class MainTab(wx.Panel):
     def __init__(self, parent):
         self.us_to_jp_map = {}
@@ -393,6 +392,44 @@ class MailTab(wx.Panel):
         self.SetAutoLayout(1)
         self.sizer.Fit(self)
         self.main_tab = main_tab
+        self.grid.Bind(wx.EVT_KEY_DOWN, self.onKeyDown)
+        
+    def onKeyDown(self, event):
+        if event.ControlDown() and event.GetKeyCode() == 67:
+            self.copy()
+    
+    def copy(self):
+        if self.grid.GetSelectionBlockTopLeft() == []:
+            rows = 1
+            cols = 1
+            iscell = True
+        else:
+            rows = self.grid.GetSelectionBlockBottomRight()[0][0] - self.grid.GetSelectionBlockTopLeft()[0][0] + 1
+            cols = self.grid.GetSelectionBlockBottomRight()[0][1] - self.grid.GetSelectionBlockTopLeft()[0][1] + 1
+            iscell = False
+        # data variable contain text that must be set in the clipboard
+        data = ''
+        # For each cell in selected range append the cell value in the data variable
+        # Tabs '\t' for cols and '\r' for rows
+        for r in range(rows):
+            for c in range(cols):
+                if iscell:
+                    data += str(self.grid.GetCellValue(self.grid.GetGridCursorRow() + r, self.grid.GetGridCursorCol() + c))
+                else:
+                    data += str(self.grid.GetCellValue(self.grid.GetSelectionBlockTopLeft()[0][0] + r, self.grid.GetSelectionBlockTopLeft()[0][1] + c))
+                if c < cols - 1:
+                    data += '\t'
+            data += '\n'
+        # Create text data object
+        clipboard = wx.TextDataObject()
+        # Set data object value
+        clipboard.SetText(data)
+        # Put the data in the clipboard
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(clipboard)
+            wx.TheClipboard.Close()
+        else:
+            wx.MessageBox("Can't open the clipboard", "Error")
 
     def onMailEvent(self,event):
         mails = event.mails
