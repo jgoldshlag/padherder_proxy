@@ -393,6 +393,13 @@ if __name__ == '__main__':
     
     find_unknown_xp_curves(config)
     
+    curve = 10000000
+    xp = []
+    for i in range(1, 100):
+        xp.append(int(round(float(curve) * ((float(i - 1) / 98.0) ** 2.5))))
+
+    print repr(xp)
+    
     sys.exit(1)
     
     session = requests.Session()
