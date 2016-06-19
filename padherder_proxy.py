@@ -98,7 +98,7 @@ class PadMaster(flow.FlowMaster):
                 cap.write(content)
                 cap.close()
                 thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl, self.region))
-            if f.request.path.startswith('/api.php?action=get_user_mail'):
+            elif f.request.path.startswith('/api.php?action=get_user_mail'):
                 resp = f.response.content
                 type, lines = contentviews.get_content_view(
                     contentviews.get("Raw"),
@@ -123,6 +123,34 @@ class PadMaster(flow.FlowMaster):
                 wx.PostEvent(self.mail_tab, evt)
                 evt = custom_events.wxStatusEvent(message="Got mail data, processing...")            
                 wx.PostEvent(self.status_ctrl,evt)
+            else:
+                config = wx.ConfigBase.Get()
+                actions = config.Read("customcapture")
+                if actions != "" and actions != None:
+                    for act in actions.split(','):
+                        act = act.strip()
+                        if f.request.path.startswith('/api.php?action=%s' % act):
+                            resp = f.response.content
+                            type, lines = contentviews.get_content_view(
+                                contentviews.get("Raw"),
+                                f.response.content,
+                                headers=f.response.headers)
+
+                            def colorful(line):
+                                for (style, text) in line:
+                                    yield text
+                                    
+                            content = u"\r\n".join(
+                                u"".join(colorful(line)) for line in lines
+                            )
+                            
+                            cap = open('captured_%s.txt' % act, 'w')
+                            cap.write(content)
+                            cap.close()
+                            
+                            evt = custom_events.wxStatusEvent(message="Got custom capture %s" % act)            
+                            wx.PostEvent(self.status_ctrl,evt)
+                            
                 
         return f
 
@@ -359,6 +387,16 @@ class SettingsTab(wx.Panel):
         lblHTTPSPortHelp.Wrap(580)
         grid.Add(lblHTTPSPortHelp, pos=(7,0), span=(1,2))
 
+        lblCustomCapture = wx.StaticText(self, label="Custom URLs to capture")
+        grid.Add(lblCustomCapture, pos=(8,0))
+        self.editCustomCapture = wx.TextCtrl(self, value=config.Read("customcapture"), size=(140,-1))
+        self.Bind(wx.EVT_TEXT, self.onCustomCaptureChange, self.editCustomCapture)
+        grid.Add(self.editCustomCapture, pos=(8,1))
+
+        lblCustomCaptureHelp = wx.StaticText(self, label="Leave blank, unless you are raijinili. Comma separated list of actions to capture.")
+        lblCustomCaptureHelp.Wrap(580)
+        grid.Add(lblCustomCaptureHelp, pos=(9,0), span=(1,2))
+        
         self.SetSizer(grid)
         
     def onUsernameChange(self, event):
@@ -380,6 +418,10 @@ class SettingsTab(wx.Panel):
     def onHTTPSPortChange(self, event):
         config = wx.ConfigBase.Get()
         config.Write("httpsport", event.GetString())
+        
+    def onCustomCaptureChange(self, event):
+        config = wx.ConfigBase.Get()
+        config.Write("customcapture", event.GetString())
 
 class MailTab(wx.Panel):
     def __init__(self, parent, main_tab):
