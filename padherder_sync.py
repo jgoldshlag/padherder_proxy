@@ -148,8 +148,8 @@ class SyncRecord:
             return "Internal error: unknown operation"
         
 
-def add_status_msg(msg, status_ctrl):
-    if status_ctrl:
+def add_status_msg(msg, status_ctrl, simulate):
+    if status_ctrl and not simulate:
         evt = custom_events.wxStatusEvent(message=msg)            
         wx.PostEvent(status_ctrl, evt)
     else:
@@ -183,7 +183,7 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
             status_ctrl.monster_data[monster['id']] = monster
         us_to_jp_map = status_ctrl.us_to_jp_map
         monster_data = status_ctrl.monster_data
-        add_status_msg("Downloaded full monster data", status_ctrl)
+        add_status_msg("Downloaded full monster data", status_ctrl, simulate)
         
         
         r = session.get(URL_USER_DETAILS % (session.auth[0]))
@@ -205,7 +205,7 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
         for material in raw_user_data['materials']:
             material_map[material['monster']] = material
 
-        add_status_msg("Downloaded current padherder box", status_ctrl)
+        add_status_msg("Downloaded current padherder box", status_ctrl, simulate)
         captured_data = json.loads(raw_captured_data)
         
         material_counts = {}
@@ -218,7 +218,7 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
             if not jp_id in monster_data:
                 if mon_array[0] in existing_monsters:
                     del existing_monsters[mon_array[0]]
-                add_status_msg('Got monster in box that is not in padherder: id = %d' % (jp_id), status_ctrl)
+                add_status_msg('Got monster in box that is not in padherder: id = %d' % (jp_id), status_ctrl, simulate)
                 continue
                 
             base_data = monster_data[jp_id]
@@ -305,11 +305,11 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
 
         # and run the syncs
         for rec in sync_records:
-            add_status_msg(rec.run(session), status_ctrl)
+            add_status_msg(rec.run(session), status_ctrl, simulate)
         
-        add_status_msg('Done', status_ctrl)
+        add_status_msg('Done', status_ctrl, simulate)
     except:
-        add_status_msg('Error doing sync:\n' + traceback.format_exc() + '\n\nPlease report this error on github', status_ctrl)
+        add_status_msg('Error doing sync:\n' + traceback.format_exc() + '\n\nPlease report this error on github', status_ctrl, simulate)
 
             
 def find_unknown_xp_curves(config):
@@ -386,21 +386,27 @@ PH_TO_PDX = {k: v['pdx_id'] for k, v in MONSTER_IDS.items() }
 PDX_IDS = {v['pdx_id']: k for k, v in MONSTER_IDS.items() }
 US_IDS = {v['us_id']: k for k, v in MONSTER_IDS.items() }
 
+class FakeStatusCtrl:
+    def __init__(self, us_to_jp_map, monster_data):
+        self.monster_data = monster_data
+        self.us_to_jp_map = us_to_jp_map
+
+
 if __name__ == '__main__':
     app = wx.App(False)
     config = wx.Config("padherder_proxy_testing")
     wx.ConfigBase.Set(config)
     
-    find_unknown_xp_curves(config)
+    #find_unknown_xp_curves(config)
     
-    curve = 10000000
-    xp = []
-    for i in range(1, 100):
-        xp.append(int(round(float(curve) * ((float(i - 1) / 98.0) ** 2.5))))
+    #curve = 10000000
+    #xp = []
+    #for i in range(1, 100):
+    #    xp.append(int(round(float(curve) * ((float(i - 1) / 98.0) ** 2.5))))
 
-    print repr(xp)
+    #print repr(xp)
     
-    sys.exit(1)
+    #sys.exit(1)
     
     session = requests.Session()
     session.headers = headers
@@ -418,9 +424,9 @@ if __name__ == '__main__':
         monster_data[monster['id']] = monster
         
     
-    print us_to_jp_map
-    print len(us_to_jp_map)
-    print US_IDS
+    #print us_to_jp_map
+    #print len(us_to_jp_map)
+    #print US_IDS
     if us_to_jp_map == US_IDS:
         print "equal"
     
@@ -432,4 +438,4 @@ if __name__ == '__main__':
     config.Write("username", sys.argv[2])
     config.Write("password", sys.argv[3])
 
-    do_sync(contents, None, "NA", False)
+    do_sync(contents, FakeStatusCtrl(us_to_jp_map, monster_data), "NA", True)
