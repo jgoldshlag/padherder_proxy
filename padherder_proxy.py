@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 
 
 import json
@@ -10,10 +10,17 @@ import cPickle
 import select, socket, SocketServer, thread, urlparse, cStringIO
 import signal
 import re
-from libmproxy import controller, proxy, flow, dump, cmdline, contentviews
-from libmproxy.proxy.server import ProxyServer
+try: # new mitmproxy?
+    from mitmproxy import controller, proxy, flow, dump, cmdline, contentviews
+    from mitmproxy.proxy.server import ProxyServer
+except ImportError: # old mitmproxy?
+    from libmproxy import controller, proxy, flow, dump, cmdline, contentviews
+    from libmproxy.proxy.server import ProxyServer
 import wx
-import wx.lib.hyperlink as hl
+try: #new wx
+    from wx.lib.agw.hyperlink import HyperLinkCtrl
+except ImportError: #old wx
+    from wx.lib.hyperlink import HyperlinkCtrl
 import wx.grid
 from urlparse import urljoin
 import traceback
@@ -307,7 +314,7 @@ class MainTab(wx.Panel):
         grid.Add(self.status_ctrl, pos=(3,0), span=(1,2))
         
         if is_out_of_date(self):
-            updateCtrl = hl.HyperLinkCtrl(self, wx.ID_ANY, label="An updated version is available", URL="https://github.com/jgoldshlag/padherder_proxy")
+            updateCtrl = HyperLinkCtrl(self, wx.ID_ANY, label="An updated version is available", URL="https://github.com/jgoldshlag/padherder_proxy")
             grid.Add(updateCtrl, pos=(4,0), span=(1,2))
         
         self.SetSizer(grid)
