@@ -21,6 +21,11 @@ URL_MONSTER_CREATE = '%s/monster/' % (API_ENDPOINT)
 
 def xp_at_level(xp_curve, level):
     curve = XP_TABLES.get(xp_curve)
+    if curve is None:
+        curve = []
+        for i in range(1, 100):
+            curve.append(int(round(float(xp_curve) * ((float(i - 1) / 98.0) ** 2.5))))
+        XP_TABLES[xp_curve] = curve
     if level > len(curve) - 1:
         return curve[-1]
     else:
