@@ -12,3 +12,4 @@ captured_data.txt
 active_skills.pickle
 captured_mail.txt
 captured_download_limited_bonus_data.txt
+*.txt
