@@ -105,7 +105,7 @@ class InterceptResolver(BaseResolver):
         reply = request.reply()
         qname = request.q.qname
         qtype = QTYPE[request.q.qtype]
-        if qname.matchGlob("api-*padsv.gungho.jp.") or qname.matchGlob("pad.dnt7.com."):
+        if qname.matchGlob("api-*padsv.gungho.jp."):
             config = wx.ConfigBase.Get()
             host = config.Read("host") or socket.gethostbyname(socket.gethostname())
             reply.add_answer(RR(qname,QTYPE.A,rdata=A(host)))

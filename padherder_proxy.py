@@ -134,32 +134,6 @@ class PadMaster(flow.FlowMaster):
                 evt = custom_events.wxStatusEvent(message="Got mail data, processing...")            
                 wx.PostEvent(self.status_ctrl,evt)
             else:
-                resp = f.response.content
-                type, lines = contentviews.get_content_view(
-                    contentviews.get("Raw"),
-                    f.response.content,
-                    headers=f.response.headers)
-
-                def colorful(line):
-                    for (style, text) in line:
-                        yield text
-                        
-                content = u"\r\n".join(
-                    u"".join(colorful(line)) for line in lines
-                )
-                
-                cap = open('captured_%d.txt' % count, 'w')
-                cap.write(f.request.path + "\r\n\r\n")
-                cap.write(f.request.content.encode('ascii', 'replace'))
-                cap.write(bytes(f.request.headers))
-                cap.write("\r\n\r\n")
-                cap.write(content.encode('ascii', 'replace'))
-                cap.close()
-                count = count + 1
-                
-                evt = custom_events.wxStatusEvent(message="Got custom capture %s" % f.request.path)            
-                wx.PostEvent(self.status_ctrl,evt)
-                return
                 config = wx.ConfigBase.Get()
                 actions = config.Read("customcapture")
                 if actions != "" and actions != None:
@@ -576,8 +550,7 @@ class MainWindow(wx.Frame):
         httpsport = config.Read("httpsport") or "443"
 
         try:
-            #proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
-            proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('http://%s:80/' % event.message))
+            proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
             proxy_server = ProxyServer(proxy_config)
         except Exception as e:
             evt = custom_events.wxStatusEvent(message='Error starting HTTPS proxy: %s' % e)
