@@ -36,7 +36,6 @@ import datetime
 PH_PROXY_VERSION = "2.7"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
-count = 0
 
 class PadMaster(flow.FlowMaster):
     def __init__(self, server, main_window, region):
@@ -82,7 +81,6 @@ class PadMaster(flow.FlowMaster):
         return f
         
     def handle_response(self, f):
-        global count
         flow.FlowMaster.handle_response(self, f)
         if f:
             f.reply()
