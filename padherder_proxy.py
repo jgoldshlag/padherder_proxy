@@ -33,9 +33,10 @@ from constants import *
 from mail_parser import *
 import datetime
 
-PH_PROXY_VERSION = "2.6"
+PH_PROXY_VERSION = "2.7"
 
 parse_host_header = re.compile(r"^(?P<host>[^:]+|\[.+\])(?::(?P<port>\d+))?$")
+count = 0
 
 class PadMaster(flow.FlowMaster):
     def __init__(self, server, main_window, region):
@@ -81,6 +82,7 @@ class PadMaster(flow.FlowMaster):
         return f
         
     def handle_response(self, f):
+        global count
         flow.FlowMaster.handle_response(self, f)
         if f:
             f.reply()
@@ -104,6 +106,7 @@ class PadMaster(flow.FlowMaster):
                 cap = open('captured_data.txt', 'w')
                 cap.write(content)
                 cap.close()
+                config = wx.ConfigBase.Get()
                 thread.start_new_thread(padherder_sync.do_sync, (content, self.status_ctrl, self.region))
             elif f.request.path.startswith('/api.php?action=get_user_mail'):
                 resp = f.response.content
@@ -131,6 +134,32 @@ class PadMaster(flow.FlowMaster):
                 evt = custom_events.wxStatusEvent(message="Got mail data, processing...")            
                 wx.PostEvent(self.status_ctrl,evt)
             else:
+                resp = f.response.content
+                type, lines = contentviews.get_content_view(
+                    contentviews.get("Raw"),
+                    f.response.content,
+                    headers=f.response.headers)
+
+                def colorful(line):
+                    for (style, text) in line:
+                        yield text
+                        
+                content = u"\r\n".join(
+                    u"".join(colorful(line)) for line in lines
+                )
+                
+                cap = open('captured_%d.txt' % count, 'w')
+                cap.write(f.request.path + "\r\n\r\n")
+                cap.write(f.request.content.encode('ascii', 'replace'))
+                cap.write(bytes(f.request.headers))
+                cap.write("\r\n\r\n")
+                cap.write(content.encode('ascii', 'replace'))
+                cap.close()
+                count = count + 1
+                
+                evt = custom_events.wxStatusEvent(message="Got custom capture %s" % f.request.path)            
+                wx.PostEvent(self.status_ctrl,evt)
+                return
                 config = wx.ConfigBase.Get()
                 actions = config.Read("customcapture")
                 if actions != "" and actions != None:
@@ -404,6 +433,12 @@ class SettingsTab(wx.Panel):
         lblCustomCaptureHelp.Wrap(580)
         grid.Add(lblCustomCaptureHelp, pos=(9,0), span=(1,2))
         
+        lblMinRarity = wx.StaticText(self, label="Only sync monsters of rarity (or higher):")
+        grid.Add(lblMinRarity, pos=(10,0))
+        self.editMinRarity = wx.TextCtrl(self, value=config.Read("rarity"), size=(140,-1))
+        self.Bind(wx.EVT_TEXT, self.onMinRarityChange, self.editMinRarity)
+        grid.Add(self.editMinRarity, pos=(10,1))
+        
         self.SetSizer(grid)
         
     def onUsernameChange(self, event):
@@ -429,6 +464,10 @@ class SettingsTab(wx.Panel):
     def onCustomCaptureChange(self, event):
         config = wx.ConfigBase.Get()
         config.Write("customcapture", event.GetString())
+
+    def onMinRarityChange(self, event):
+        config = wx.ConfigBase.Get()
+        config.Write("rarity", event.GetString())
 
 class MailTab(wx.Panel):
     def __init__(self, parent, main_tab):
@@ -537,7 +576,8 @@ class MainWindow(wx.Frame):
         httpsport = config.Read("httpsport") or "443"
 
         try:
-            proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
+            #proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('https://%s:443/' % event.message))
+            proxy_config = proxy.ProxyConfig(port=int(httpsport), host=host, mode='reverse', upstream_server=cmdline.parse_server_spec('http://%s:80/' % event.message))
             proxy_server = ProxyServer(proxy_config)
         except Exception as e:
             evt = custom_events.wxStatusEvent(message='Error starting HTTPS proxy: %s' % e)

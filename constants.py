@@ -21,6 +21,8 @@ SYNC_UPDATE = "update"
 SYNC_UPDATE_MATERIAL = "update_material"
 SYNC_DELETE = "delete"
 SYNC_UPDATE_RANK = "update_rank"
+SYNC_ADD_TEAM = "add_team"
+SYNC_UPDATE_TEAM = "update_team"
 
 SYNC_ACTION_ALLOW = "Allow"
 SYNC_ACTION_SKIP = "Skip"

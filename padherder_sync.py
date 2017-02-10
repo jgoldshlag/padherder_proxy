@@ -17,6 +17,8 @@ URL_ACTIVE_SKILLS = 'https://www.padherder.com/api/active_skills/'
 URL_USER_DETAILS = '%s/user/%%s/' % (API_ENDPOINT)
 URL_USER_PROFILE = '%s/profile/%%s/' % (API_ENDPOINT)
 URL_MONSTER_CREATE = '%s/monster/' % (API_ENDPOINT)
+URL_TEAM_CREATE = '%s/team/' % (API_ENDPOINT)
+URL_TEAM = '%s/team/%%s/' % (API_ENDPOINT)
 
 
 def xp_at_level(xp_curve, level):
@@ -86,6 +88,16 @@ LATENT_BIT_TO_PH_ID = {
 18: 9, # dark resist
 20: 10, # light resist
 22: 11, # skill block resist
+# theorerical new 2 slot latents...
+24: 12, # 'HP +1.5% / ATK 1+ / RCV +5% (does not count +eggs). *2 slots used.',
+26: 13, # 'Additional 1.5x damage to God type enemies. (Avalable monsters: Balanced type / Devil type / Machine type). *2 slots used.',
+28: 14, # 'Additioanl 1.5x damage to Dragon type enemies. (Available monsters: Balanced type / Heal type). *2 slots used.',
+30: 15, # 'Additional 1.5x damage to Devil type enemies. (Available monsters: Balanced type / God type / Devil type). *2 slots used.',
+32: 16, # 'Additional 1.5x damage to Machine type enemies. (Available monsters: Balanced type / Physical type / Dragon type). *2 slots used.',
+34: 17, # 'Additional 1.5x damage to Balanced type enemies. (Available monsters: Balanced type / Machine type). *2 slots used.',
+36: 18, # 'Additional 1.5x damage to Attacker type enemies. (Available monsters: Balanced type / Healer type). *2 slots used.',
+38: 19, # 'Additional 1.5x damage to Physical type enemies. (Available monsters: Balanced type / Attacker type). *2 slots used.',
+40: 20, # 'Additional 1.5x damage to Healer type enemies. (Available monsters: Balanced type / Dragon type / Physical type). *2 slots used.',
 }
 
 def get_latents(num):
@@ -149,21 +161,113 @@ class SyncRecord:
                 return 'Updated rank'
             else:
                 return 'Failed updating rank'
+        elif self.operation == SYNC_ADD_TEAM:
+            r = session.post(URL_TEAM_CREATE, self.data)
+            if r.status_code == requests.codes.ok or r.status_code == 201:
+                return 'Created team %s' % self.data['name']
+            else:
+                return 'Failed creating team %s: %s' % (self.data['name'], r)
+        elif self.operation == SYNC_UPDATE_TEAM:
+            r = session.patch(self.url, self.data)
+            if r.status_code == requests.codes.ok or r.status_code == 201:
+                return 'Updated team %s' % self.data['name']
+            else:
+                return 'Failed updating team %s: %s' % (self.data['name'], r)
         else:
             return "Internal error: unknown operation"
         
 
 def add_status_msg(msg, status_ctrl, simulate):
     if status_ctrl and not simulate:
-        evt = custom_events.wxStatusEvent(message=msg)            
+        evt = custom_events.wxStatusEvent(message=msg)
         wx.PostEvent(status_ctrl, evt)
     else:
-        print msg
+        print msg.encode('ascii', errors='ignore')
+
+def do_sync_teams(captured_data, raw_user_data, status_ctrl, simulate=False):
+    try:
+        sync_records = []
+        num_teams = captured_data['max_decks']
+        existing_monsters = {}
+        for monster in raw_user_data['monsters']:
+            if monster['pad_id'] != 0:
+                existing_monsters[monster['pad_id']] = monster
+        
+        # first, lets grab the teams that are already in ph
+        teams = [None for i in range(num_teams)]
+        for team in raw_user_data['teams']:
+            if team['description'].startswith("Autosynced Team ") and len(team['description']) > 17:
+                team_num = int(team['description'][16:18])
+                if team_num < 0 or team_num > num_teams:
+                    continue
+                teams[team_num] = team
+        
+        for i in range(num_teams):
+            cap_team = captured_data['decksb']['s%02d' % i]
+            if len(cap_team) < 5:
+                add_status_msg('Skipping sync of team %d because it is not a full team' % (i + 1), status_ctrl, simulate)
+                continue
+            skip = False
+            for pad_id in cap_team:
+                if pad_id not in existing_monsters:
+                    add_status_msg('Skipping sync of team %d because a new monster is on the team. Please sync again' % (i + 1), status_ctrl, simulate)
+                    skip = True
+                    break
+            if skip:
+                continue
+            ph_cap = [existing_monsters[pad_id] for pad_id in cap_team]
+            if teams[i] is not None:
+                team = teams[i]
+                if ph_cap[0]['id'] != team['leader'] or \
+                   ph_cap[1]['id'] != team['sub1'] or \
+                   ph_cap[2]['id'] != team['sub2'] or \
+                   ph_cap[3]['id'] != team['sub3'] or \
+                   ph_cap[4]['id'] != team['sub4']:
+                    # we need to update the team
+                    team['leader'] = ph_cap[0]['id']
+                    team['sub1'] = ph_cap[1]['id']
+                    team['sub2'] = ph_cap[2]['id']
+                    team['sub3'] = ph_cap[3]['id']
+                    team['sub4'] = ph_cap[4]['id']
+                    team['friend_leader'] = ph_cap[0]['monster']
+                    team['friend_awakening'] = ph_cap[0]['current_awakening']
+                    team['friend_skill'] = ph_cap[0]['current_skill']
+                    sync_records.append(SyncRecord(SYNC_UPDATE_TEAM, team, team, team['url']))
+            else:
+                # need to add a team
+                team = {
+                  "description": "Autosynced Team %02d" % i,
+                  "friend_atk": 99,
+                  "friend_awakening": ph_cap[0]['current_awakening'],
+                  "friend_leader": ph_cap[0]['monster'],
+                  "friend_hp": 99,
+                  "friend_level": 99,
+                  "friend_rcv": 99,
+                  "friend_skill": ph_cap[0]['current_skill'],
+                  "leader": ph_cap[0]['id'],
+                  "name": "Autosynced Team %02d" % i,
+                  "order": i,
+                  "sub1": ph_cap[1]['id'],
+                  "sub2": ph_cap[2]['id'],
+                  "sub3": ph_cap[3]['id'],
+                  "sub4": ph_cap[4]['id'],
+                  "team_group": 1,
+                }
+                sync_records.append(SyncRecord(SYNC_ADD_TEAM, team, team))
+        return sync_records
+                    
+    except:
+        add_status_msg('Error doing team sync:\n' + traceback.format_exc() + '\n\nPlease report this error on github', status_ctrl, simulate)
 
 def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
     try:
         sync_records = []
         config = wx.ConfigBase.Get()
+        min_rarity = config.Read("rarity")
+        if min_rarity is None or min_rarity == '':
+            min_rarity = 0
+        else:
+            min_rarity = int(min_rarity)
         session = requests.Session()
         session.auth = (config.Read("username"), config.Read("password"))
         #session.verify = 'cacert.pem'
@@ -195,6 +299,7 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
         fake_r = r
         if r.status_code != requests.codes.ok:
             print 'failed: %s' % (r.status_code)
+            print r.content
             return
         
         raw_user_data = json.loads(r.content)
@@ -231,6 +336,10 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
             if base_data['type'] in (0, 12, 14):
                 continue
 
+            if base_data['rarity'] < min_rarity:
+                add_status_msg('Skipping monster of rarity %d - %s' % (base_data['rarity'], base_data['name']), status_ctrl, simulate)
+                continue
+            
             # Cap card XP to monster's max XP
             mon_array[1] = min(mon_array[1], xp_at_level(base_data['xp_curve'], base_data['max_level']))
             # Cap card awakening to monster's max awoken level
@@ -307,6 +416,9 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
         if captured_data['lv'] != raw_user_data['profile']['rank']:
             sync_records.append(SyncRecord(SYNC_UPDATE_RANK, captured_data['lv'], url=URL_USER_PROFILE % raw_user_data['profile']['id']))
 
+        # and check teams
+        if config.Read("dont_sync_teams") != 1:
+            sync_records.extend(do_sync_teams(captured_data, raw_user_data, status_ctrl, simulate))
 
         # and run the syncs
         for rec in sync_records:
