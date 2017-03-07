@@ -95,6 +95,10 @@ class PADMail:
                 return "%d magic stones" % self.amount
         elif self.bonus_id == 9902:
             return "%d Pal points" % self.amount
+        elif self.bonus_id == 9911:
+            return "Bonus Dungeon"
+        elif self.bonus_id == 9912:
+            return "%d Monster Points" % self.amount
         else:
             jp_id = us_to_jp_map.get(self.bonus_id, self.bonus_id)
             return monster_data[jp_id]['name']
