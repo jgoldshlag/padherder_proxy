@@ -203,7 +203,10 @@ def do_sync_teams(captured_data, raw_user_data, status_ctrl, simulate=False):
                 teams[team_num] = team
         
         for i in range(num_teams):
-            cap_team = captured_data['decksb']['s%02d' % i]
+            team_key = 's%02d' % i
+            if team_key not in captured_data['decksb']:
+                continue
+            cap_team = captured_data['decksb'][team_key]
             if len(cap_team) < 5:
                 add_status_msg('Skipping sync of team %d because it is not a full team' % (i + 1), status_ctrl, simulate)
                 continue
