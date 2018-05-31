@@ -324,6 +324,11 @@ def do_sync(raw_captured_data, status_ctrl, region, simulate=False):
         material_counts = {}
         for mon_array in captured_data['card']:
             jp_id = us_to_jp_map.get(mon_array[5], mon_array[5])
+            if mon_array[0] > 0xFFFF0000:
+                # new stacking evo mat
+                material_counts[jp_id] = mon_array[1]
+                continue
+            
             # Update material counts
             if jp_id in material_map:
                 material_counts[jp_id] = material_counts.get(jp_id, 0) + 1
